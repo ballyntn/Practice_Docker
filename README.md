@@ -1,17 +1,21 @@
 # Practice Docker - Go Web Application
 
-A simple Go web application containerized with Docker that serves a "Hello World" greeting endpoint.
+A production-ready Go web application containerized with Docker, featuring graceful shutdown, health checks, and best practices.
 
 ## Overview
 
-This project demonstrates a basic Go HTTP server application running in a Docker container. The application provides a simple REST endpoint that returns a greeting message with the current timestamp.
+This project demonstrates a well-structured Go HTTP server application running in a Docker container. The application provides REST endpoints for greetings and health checks, with proper error handling, graceful shutdown, and security best practices.
 
 ## Features
 
-- Simple HTTP server written in Go
-- Docker containerization
-- Health check endpoint at root path (`/`)
-- Returns current timestamp with greeting
+- ✅ **Structured HTTP server** with proper routing
+- ✅ **Graceful shutdown** handling (SIGINT, SIGTERM)
+- ✅ **Health check endpoint** (`/health`)
+- ✅ **Configurable port** via environment variable
+- ✅ **Multi-stage Docker build** for optimized image size
+- ✅ **Security best practices** (non-root user, minimal base image)
+- ✅ **Proper error handling** and logging
+- ✅ **Request timeouts** configured
 
 ## Prerequisites
 
@@ -23,10 +27,11 @@ This project demonstrates a basic Go HTTP server application running in a Docker
 
 ```
 practice-docker/
-├── Dockerfile      # Docker configuration for containerizing the application
-├── go.mod         # Go module definition
-├── main.go        # Main application code
-└── README.md      # This file
+├── .dockerignore   # Files to exclude from Docker build
+├── Dockerfile      # Multi-stage Docker configuration
+├── go.mod          # Go module definition
+├── main.go         # Main application code
+└── README.md       # This file
 ```
 
 ## Local Development
@@ -43,14 +48,19 @@ practice-docker/
    go run main.go
    ```
 
-3. The server will start on port `3333`. Visit:
+   Or with a custom port:
+   ```bash
+   PORT=8080 go run main.go
+   ```
+
+3. The server will start on port `3333` (or the port specified in `PORT` environment variable). Visit:
    ```
    http://localhost:3333
    ```
 
 4. You should see a response like:
    ```
-   Hello World! 2024-01-15 10:30:45.123456789 +0000 UTC
+   Hello World! 2024-01-15T10:30:45.123456789Z
    ```
 
 ### Building Locally
@@ -58,13 +68,19 @@ practice-docker/
 To build the application binary:
 
 ```bash
-go build -o api
+go build -o practice-docker
 ```
 
 Then run the binary:
 
 ```bash
-./api
+./practice-docker
+```
+
+Or with a custom port:
+
+```bash
+PORT=8080 ./practice-docker
 ```
 
 ## Docker Usage
@@ -78,16 +94,21 @@ docker build -t practice-docker .
 ### Running the Container
 
 ```bash
-docker run -p 4444:3333 practice-docker
+docker run -p 3333:3333 practice-docker
 ```
 
-**Note:** The Dockerfile exposes port 4444, but the application listens on port 3333. Use the port mapping `-p 4444:3333` to map the container's port 3333 to host port 4444.
+The application listens on port 3333 inside the container. Map it to any host port:
 
-### Accessing the Application
-
-Once the container is running, visit:
+```bash
+docker run -p 8080:3333 practice-docker
 ```
-http://localhost:4444
+
+### Running with Custom Port
+
+You can override the port using the `PORT` environment variable:
+
+```bash
+docker run -p 8080:8080 -e PORT=8080 practice-docker
 ```
 
 ### Running in Detached Mode
@@ -95,7 +116,7 @@ http://localhost:4444
 To run the container in the background:
 
 ```bash
-docker run -d -p 4444:3333 --name practice-app practice-docker
+docker run -d -p 3333:3333 --name practice-app practice-docker
 ```
 
 ### Viewing Logs
@@ -104,7 +125,15 @@ docker run -d -p 4444:3333 --name practice-app practice-docker
 docker logs practice-app
 ```
 
+Or follow logs in real-time:
+
+```bash
+docker logs -f practice-app
+```
+
 ### Stopping the Container
+
+The application supports graceful shutdown. Stop it with:
 
 ```bash
 docker stop practice-app
@@ -116,27 +145,51 @@ docker stop practice-app
 docker rm practice-app
 ```
 
+Or remove it automatically when stopped:
+
+```bash
+docker run --rm -p 3333:3333 practice-docker
+```
+
 ## API Endpoints
 
 ### GET /
 
-Returns a greeting message with the current timestamp.
+Returns a greeting message with the current timestamp in RFC3339Nano format.
 
 **Response:**
 ```
-Hello World! 2024-01-15 10:30:45.123456789 +0000 UTC
+Hello World! 2024-01-15T10:30:45.123456789Z
 ```
+
+**Status Code:** `200 OK`
+
+### GET /health
+
+Health check endpoint for monitoring and load balancers.
+
+**Response:**
+```json
+{"status":"healthy"}
+```
+
+**Status Code:** `200 OK`
 
 ## Configuration
 
-- **Application Port:** 3333 (configured in `main.go`)
-- **Docker Exposed Port:** 4444 (configured in `Dockerfile`)
-- **Go Version:** 1.24.3
+- **Default Port:** `3333` (configurable via `PORT` environment variable)
+- **Go Version:** `1.24.3`
+- **Base Image:** `alpine:latest` (final stage)
+- **Read Timeout:** `15 seconds`
+- **Write Timeout:** `15 seconds`
+- **Idle Timeout:** `60 seconds`
 
-## Notes
+## Docker Image Details
 
-- The Dockerfile builds the binary as `api` but the CMD references `./practice`. You may need to update the Dockerfile CMD to match the build output.
-- The application listens on port 3333 internally, but Docker exposes port 4444. Use port mapping when running the container.
+- **Multi-stage build** for smaller final image size
+- **Non-root user** for enhanced security
+- **Alpine Linux** base image for minimal footprint
+- **Optimized layers** for better caching
 
 ## Troubleshooting
 
@@ -146,10 +199,16 @@ If you encounter a "port already in use" error:
 
 ```bash
 # Find the process using the port
-lsof -i :3333  # For local development
-lsof -i :4444  # For Docker
+lsof -i :3333
 
 # Kill the process or use a different port
+kill -9 <PID>
+```
+
+Or use a different port:
+
+```bash
+PORT=8080 go run main.go
 ```
 
 ### Docker Build Issues
@@ -167,6 +226,35 @@ If the Docker build fails:
    ```bash
    go mod tidy
    ```
+
+4. Clean Docker build cache if needed:
+   ```bash
+   docker build --no-cache -t practice-docker .
+   ```
+
+### Container Won't Start
+
+1. Check container logs:
+   ```bash
+   docker logs <container-name>
+   ```
+
+2. Verify port mapping:
+   ```bash
+   docker ps
+   ```
+
+3. Test the application locally first:
+   ```bash
+   go run main.go
+   ```
+
+## Development Tips
+
+- Use `Ctrl+C` to gracefully shutdown the server when running locally
+- The application handles SIGINT and SIGTERM signals for clean shutdown
+- Health check endpoint can be used with orchestration tools (Kubernetes, Docker Swarm, etc.)
+- All endpoints return proper HTTP status codes and headers
 
 ## License
 
